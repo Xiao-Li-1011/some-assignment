@@ -1,0 +1,332 @@
+<!DOCTYPE html PUBLIC "-//IETF//DTD HTML 2.0//EN">
+<!-- saved from url=(0050)http://www.cse.unsw.edu.au/~cs9414/17s1/hw3prolog/ -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>COMP9414/9814 Assignment 3</title>
+</head>
+<body lang="EN">
+<h2 align="center">COMP9414/9814 Artificial Intelligence</h2>
+<h2 align="center">Session 1, 2017</h2>
+<h3 align="center">Project 3, Option 2: Prolog (BDI Agent)</h3>
+<p align="center">
+Due: Sunday 28 May, 11:59 pm
+<br align="center">
+Marks: 18% of final assessment
+
+</p><h4>Introduction</h4>
+
+In this Assignment, you will be implementing an agent to move around
+in a rectangular environment, picking truffles (exotic mushrooms)
+and selling them to local restaurants.
+
+In doing so, you will implement the basic functions of a simple
+BDI Agent that operates in a Gridworld, and learn about
+the ideas underlying BDI agents.
+
+<h4>Gridworld</h4>
+
+The Gridworld consists of a two-dimensional grid of locations,
+extending to infinity in both directions. Truffles and restaurants
+appear at certain locations. The agent is able to move to a place where
+truffles are located and execute a <code>pick</code> action.
+After collecting a sufficient number of truffles, it
+can move to the location of a restaurant and
+execute a <code>sell</code> action.
+The agent can stay where it is, or move one square at a time,
+either horizontally or vertically. The world is dynamic in that
+truffles and restaurants can appear spontaneously
+at random locations at any time.
+<p>
+</p><center>
+<img src="./COMP9414_9814 Assignment 3_files/truffles.gif">
+<p>
+Figure 1: Gridworld State: Agent with truffles and restaurants
+</p></center>
+<p>
+The supplied Prolog program <code>gridworld.pl</code> implements a system for conducting an
+experimental trial consisting of an agent in the Gridworld that
+repeatedly executes the BDI interpretation cycle for 20 iterations
+(this is a deliberately small number for ease of writing and debugging
+the program). The initial state of the world is always that there are
+no truffles or restaurants, and the agent is at location <code>(5,5)</code>
+holding no truffles.
+</p><p>
+The agent's <i>beliefs</i> at any time are in the form
+<code>beliefs(at(X,Y),stock(T))</code> meaning that the agent
+is at location <code>(X,Y)</code>
+and is currently holding a stock of <code>T</code> truffles.
+The initial belief state of the agent is represented by
+<code>beliefs(at(5,5),stock(0))</code>.
+</p><p>
+The agent's <i>goals</i> at any time are in the form
+<code>goals(Goals_rest,Goals_truff)</code>
+where <code>Goals_rest</code> is a list of locations of restaurants
+and the number of truffles they wish to buy, and <code>Goals_truff</code>
+is a list of locations of truffles, and the number of truffles
+at that location.
+Each goal of the agent is represented as a term
+<code>goal(X,Y,S)</code>, where <code>(X,Y)</code> is the location
+of either a truffle or a restaurant, and <code>S</code>
+is the number of truffles.
+</p><p>
+The agent's <i>intentions</i> are in the form
+<code>intents(Intents_sell,Intents_pick)</code>
+where <code>Intents_sell</code> and <code>Intents_pick</code>
+each consist of a list of pairs of the form
+<code>[Goal, Plan]</code>,
+representing a goal with an associated plan
+(which may be the empty plan), ordered according to some priority.
+</p><p>
+Each plan is a list of actions. To fulfil an intention, the agent
+executes the plan associated with its goal, which will make the agent
+move along a path towards the goal and then either
+<code>pick</code> or <code>sell</code> truffles.
+If, when the agent chooses an intention to fulfil,
+the plan associated with the goal of that intention
+is empty or cannot be executed, the agent creates a new plan for the
+goal and then begins to execute this plan.
+</p><p>
+In each cycle the agent executes one action. There are three types
+of action the agent can execute:
+</p><p>
+&nbsp;&nbsp;&nbsp;<code>move(X,Y)</code> - the agent moves to location <code>(X,Y)</code><br>
+&nbsp;&nbsp;&nbsp;<code>pick(X,Y)</code> - the agent picks up the truffles at <code>(X,Y)</code><br>
+&nbsp;&nbsp;&nbsp;<code>sell(X,Y)</code> - the agent sells truffles to the restaurant at <code>(X,Y)</code>
+and scores the associated points<br>
+
+</p><p>
+</p><h4>BDI Interpreter</h4>
+<p>
+
+In each time cycle, the agent executes the interpreter shown
+abstractly in the table below.
+The new external events on each cycle
+are represented as a list of terms of the form
+<code>truffle(X,Y,S)</code> or <code>restaurant(X,Y,S)</code>,
+within some viewing distance of the agent. 
+The agent will repeatedly perceive any truffle or restaurant
+so long as it remains in viewing range. It is not
+assumed that the agent can see all of the grid, so a new external
+event may occur as the agent is moving towards another target.
+Each new perceived event <code>truffle(X,Y,S)</code>
+or <code>restaurant(X,Y,S)</code>
+should trigger a goal for the agent, represented as a term of the form
+<code>goal(X,Y,S)</code>.
+Any new goal is
+incorporated into the agent's current intentions according to the
+agent's prioritization strategy (see below). The agent then selects
+one action for execution from the current set of intentions. Here the
+agent always selects the first intention on the list if there is one,
+creates or modifies the associated plan if necessary, then selects the
+first action in that plan, removes the selected action from the chosen
+plan, executes the action, and updates the list of intentions by
+removing any successfully achieved goals.
+</p><p>
+</p><center>
+<table frame="box">
+<tbody><tr><td><b>Abstract BDI Interpreter:</b></td></tr>
+<tr><td>&nbsp;&nbsp;initialize-state();</td></tr>
+<tr><td>&nbsp;&nbsp;<b>do</b></td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;Percepts = get_new_external_events();</td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;G = trigger(Percepts);</td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;I = incorporate_goals(G, B, I);</td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;(I, A) = get_action(B, I);</td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;execute(A);</td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;Observation = observe(A);</td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;B = update_beliefs(Observation);</td></tr>
+<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;I = update_intentions(Observation);</td></tr>
+<tr><td>&nbsp;&nbsp;<b>until</b> quit</td></tr>
+</tbody></table>
+</center>
+<p>
+The agent maintains separate lists of <code>sell</code> and
+<code>pick</code> intentions.
+Within each list, its prioritization strategy is very simple:
+without reordering
+existing goals, each new goal is inserted into the list of intentions
+in order of value (higher values before lower values), but if the new
+goal has the same value as existing goal(s), the new goal is inserted
+into the list of goals of the same value in order of distance from the
+current position (closer before further away). This means the agent
+maintains a "commitment" to pursuing its goals (the agent only
+changes its intention to pick or sell a higher value item or a closer item
+with the same value).
+</p><p>
+</p><h4>Assignment [18 marks]</h4>
+<p>
+You are supplied with a Prolog program in a file
+<code>gridworld.pl</code> that
+implements the experimental setup, including the generation of events
+(appearance of truffles and restaurants)
+and the execution of actions, and the agent's BDI
+interpretation cycle and observation functions.
+</p><p>
+[2 marks] Write a Prolog procedure <code>trigger(Events, Goals)</code>
+which takes a single list of events, each of the form
+<code>truffle(X,Y,S)</code> or <code>restaurant(X,Y,S)</code>,
+and computes the <code>Goals</code> for the agent in the form of two separate
+lists of items in the form <code>goal(X,Y,S)</code>.
+Your precedure should return <code>Goals</code> in the form
+<code>goals(Goals_rest,Goals_truff)</code> where
+<code>Goals_rest</code> and <code>Goals_truff</code>
+are both lists of items in the form <code>goal(X,Y,S)</code>.
+</p><p>
+[5 marks] Write a Prolog procedure<br>
+<code>incorporate_goals(Goals, Beliefs, Intentions, Intentions1)</code>
+</p><p>
+This procedure should take three inputs, as follows:
+</p><ol type="1">
+<li>
+a set of <code>Goals</code> in the form
+<code>goals(Goals_rest,Goals_truff)</code>
+</li><li> a set of <code>Beliefs</code> in the form
+<code>beliefs(at(X,Y),stock(T))</code>
+</li><li> the current <code>Intentions</code> of the agent, in the form
+<code>intents(Int_sell,Int_pick)</code>
+where <code>Int_sell</code>, <code>Int_pick</code> are lists
+of intentions in the form <code>[goal(X,Y,S), Plan]</code>
+</li></ol>
+<p>
+Your procedure should return the updated
+<code>Intentions</code> of the agent
+after inserting the new goals from <code>Goals_rest</code>
+and <code>Goals_truff</code> into <code>Int_sell</code>
+and <code>Int_pick</code>, respectively.
+In each case, the new goals should be inserted into the
+existing list in decreasing order of <code>S</code>,
+using the Manhattan distance from the agent's current position
+to break ties.
+More precisely, a new goal
+should be placed immediately before the first goal in the list that
+has a lower value of <code>S</code>, or which has an equal value
+of <code>S</code> and is further away from
+the agent's current position (without reordering the current list of
+goals). Note that because of repeated perception of the same event,
+only new goals should be inserted into the list of intentions. The
+<coed>Plan associated with each new goal should be the empty plan
+(represented as the empty list <code>[]</code>).
+</coed></p><p>
+[5 marks] Write a Prolog procedure<br>
+<code>get_action(Beliefs, Intentions, Intentions1, Action)</code><br>
+which takes the agent's <code>Beliefs</code> in the form
+<code>beliefs(at(X,Y),stock(T))</code> and its current
+<code>Intentions</code> in the form
+<code>intents(Int_sell,Int_pick)</code> (as described above),
+and computes an action to be taken by the agent as well as the
+updated <code>Intentions</code>.
+The agent should select an intention as follows:
+</p><p>
+</p><ul>
+<li> If the list <code>Int_sell</code> of selling intentions 
+is not empty, and its first item
+<code>[goal(X,Y,S), Plan]</code>
+satisfies the property that <code>S &#8804; T</code>
+(i.e. the number of truffles in the agent's stock is greater
+than or equal to the number of truffles that the restaurant
+wants to buy) then this intention is selected;
+</li><li> Otherwise, if the list <code>Int_pick</code>
+of picking intentions is not empty, then its first item
+<code>[goal(X,Y,S), Plan]</code> is selected;
+</li><li> Otherwise, no intention is selected;
+in this case, the agent's <code>Intentions</code> should remain as they are,
+and it should stay in its current location (i.e. action is
+<code>move(X,Y)</code> if it is currently <code>at(X,Y)</code>).
+</li></ul>
+The file <code>gridworld.pl</code> includes an
+<code>applicable()</code> predicate for testing
+whether an action is applicable.
+If the first action in the selected plan is applicable,
+the agent selects this action and updates the plan
+to remove the selected action. If there is no associated plan
+(i.e. the plan is the empty list) or the first action in the plan for
+the selected intention is not applicable in the current state,
+the agent should construct a new plan to go from its current position
+to the goal location and then either pick or sell truffles at that location.
+The plan will be a list of <code>move</code> actions 
+followed by either a <code>pick</code> or <code>sell</code> action.
+The agent should then select the first action in
+this new plan, and update the list of intentions to incorporate the
+new plan (minus the selected first action). Due to the fact that there
+are no obstacles in the world, the exact path the agent takes towards
+the goal does not matter, so choose any convenient way of implementing
+this procedure.
+<p>
+[1 mark] Write a Prolog procedure<br>
+<code>update_beliefs(Observation, Beliefs, Beliefs1)</code><br>
+to compute the new beliefs
+resulting from the agent's observations, as follows:
+</p><ul>
+<li> <code>at(X,Y)</code> - the agent should believe it is <code>at(X,Y)</code>
+</li><li> <code>picked(X,Y,S)</code> - <code>stock(T)</code> changes to <code>stock(T1)</code> where <code>T1 is T+S</code>
+</li><li> <code>sold(X,Y,S)</code> - <code>stock(T)</code> changes to <code>stock(T1)</code> where <code>T1 is T-S</code>
+</li></ul>
+<p>
+[1 mark] Write a Prolog procedure<br>
+<code>update_intentions(Observation, Intentions, Intentions1)</code><br>
+to update the agent's intentions, based on observation.
+An <code>at(X,Y)</code> observation should not change the agent's intentions.
+In the case of a <code>picked()</code> or <code>sold()</code> observation,
+the agent should remove the corresponding plan from its list of
+intentions (since this plan has now successfully been executed).
+</p><p>
+There are 4 marks allocated for comments and programming style.
+</p><p>
+In general, a program that attempts a substantial
+part of the job but does that part correctly
+will receive more marks than one attempting to do
+the entire job but with many errors.
+</p><p>
+You can see an example of the output of a trial run by clicking
+<a href="http://www.cse.unsw.edu.au/~cs9414/17s1/hw3prolog/trial.txt" title="[&#27492;&#38142;&#25509;&#24050;&#30772;&#35299;]
+">here</a>.
+Note: there was previously an error in Cycles 18 and 19 of this file.
+Please download the new version (updated 18 May 2017).
+The truffle (8,0,9) first appears in Cycle 2,
+but does not become visible to the agent until Cycle 18,
+at which point it generates an intention that is placed in front of
+the truffle at (5,4,3). Similarly, the new restaurant (8,6,5) should be
+placed in front of (3,1,0). The agent abandons its plan to move towards
+(3,1,0) and instead generates a new plan to move toward (8,6,5).
+</p><p>
+
+</p><h4>Submission</h4>
+<p>
+Submit one file called <code>agent.pl</code> using the command
+</p><pre>give cs9414 hw3prolog agent.pl
+</pre>
+Your solution should work with the supplied file
+<code><a href="http://www.cse.unsw.edu.au/~cs9414/17s1/hw3prolog/gridworld.pl">gridworld.pl</a></code>.
+<b>Do not change any of the procedures in this file and do not include
+the code from this file with your submission.</b>
+<p>
+The submission deadline is Sunday 28 May, 11:59 pm.<br>
+15% penalty will be applied to the (maximum) mark
+for every 24 hours late after the deadline.
+</p><p>
+Questions relating to the project can be posted to the
+Forums on the course Web site.
+</p><p>
+If you have a question that has not already been answered on
+the Forum, you can email it to
+<code>blair@cse.unsw.edu.au</code>
+</p><p>
+</p><h4>Plagiarism Policy</h4>
+<p>
+Your program must be entirely your own work.
+Plagiarism detection software will be used to compare all submissions pairwise
+(including submissions for any similar projects from previous years)
+and serious penalties will be applied, particularly in the case
+of repeat offences.
+</p><p>
+<b>DO NOT COPY FROM OTHERS; DO NOT ALLOW ANYONE TO SEE YOUR CODE</b>
+</p><p>
+Please refer to the
+<a href="https://student.unsw.edu.au/plagiarism">UNSW Policy on Academic Honesty and Plagiarism</a>
+if you require further clarification on this matter.
+</p><p>
+</p><p>
+Good luck!
+<br>
+</p><hr>
+
+
+</body><iframe id="tmp_downloadhelper_iframe" style="display: none;" src="./COMP9414_9814 Assignment 3_files/saved_resource.html"></iframe></html>
