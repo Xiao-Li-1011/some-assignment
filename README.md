@@ -1,3 +1,3 @@
 # some-assignment
 
-### There are some small assignment in university.
+### There are some small assignment in my university period.
